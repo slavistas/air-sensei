@@ -20,6 +20,10 @@
 #include "esp_log.h"
 #include "driver/i2c.h"
 #include "esp32s2/rom/ets_sys.h"
+#include <sys/time.h>
+#include <esp_netif_sntp.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 /******************************************************************************/
 /*!                         MQTT Driver Includes                              */
@@ -37,6 +41,7 @@
 /******************************************************************************/
 /*!                        WI-FI Driver Includes                              */
 #include "wifi_station.h"
+#include "esp_mac.h"
 
 static const char *TAG = "MQTT_BME280";
 
@@ -371,70 +376,123 @@ int8_t configureBME280(uint32_t *period, struct bme280_dev *dev){
     return rslt;
 }
 
-void app_main(void)
-{
+/*!
+ *  @brief This function configures SNTP client to talk to an NTP server and get current date/time
+ */
+int8_t configureSNTP(){
+    esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG(CONFIG_NTP_URI);
+    esp_netif_sntp_init(&config);
+
+    // See this for valid timezone codes https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
+    // setenv("TZ", CONFIG_TIMEZONE_LOCAL_STRING, 1);
+    // tzset();
+
+    ESP_LOGI(TAG, "Trying to configure SNTP and talk to server at '%s'", CONFIG_NTP_URI);
+    if (esp_netif_sntp_sync_wait(pdMS_TO_TICKS(10000)) != ESP_OK) {
+        ESP_LOGI(TAG, "Failed to sync with '%s' and update system time within 10s timeout", CONFIG_NTP_URI);
+        return 1;
+    } else {
+        // Get Current Time
+        time_t now;
+        char strftime_buf[64];
+        struct tm timeinfo;
+    
+        time(&now);
+        localtime_r(&now, &timeinfo);
+        strftime(strftime_buf, sizeof(strftime_buf), "%c %Z", &timeinfo);
+        ESP_LOGI(TAG, "SNTP Synced to '%s'\nThe current date/time in %s is: %s", CONFIG_NTP_URI, CONFIG_TIMEZONE_LOCATION, strftime_buf);
+    }
+
+    return 0;
+}
+
+void taskPublishEnvironmentalData(void *arg) {
     int8_t rslt;
     uint32_t period;
     struct bme280_dev dev;
 
-    wifi_init();
-
-    configureBME280(&period, &dev);
+    struct tph_data data;
 
     esp_mqtt_client_handle_t client = mqtt_app_start();
 
-    struct tph_data data;
+    configureBME280(&period, &dev);
+
+    esp_err_t ret = ESP_OK;
+    uint8_t base_mac_addr[6];
+    ret = esp_efuse_mac_get_default(base_mac_addr);
+    if(ret != ESP_OK){
+            ESP_LOGE(TAG, "Failed to get base MAC address from EFUSE BLK0. (%s)", esp_err_to_name(ret));
+            ESP_LOGE(TAG, "Aborting");
+            abort();
+        } 
 
     while (true)
     {
         rslt = get_tph(period, &dev, &data);
         bme280_error_codes_print_result("get_tph", rslt);
 
-        char temp_string[15];
-        char pressure_string[15];
-        char humidity_string[15];
+        char json_string[256];
+        // char pressure_string[128];
+        // char humidity_string[128];
         
+        // Get Current Time
+        time_t now;
+        char strftime_buf[64];
+        struct tm timeinfo;
+    
+        time(&now);
+        localtime_r(&now, &timeinfo);
+        strftime(strftime_buf, sizeof(strftime_buf), "%c %Z", &timeinfo);
+        ESP_LOGI(TAG, "The current date/time in %s is: %s", CONFIG_TIMEZONE_LOCATION, strftime_buf);
 
         #ifdef BME280_DOUBLE_ENABLE
-            sprintf(temp_string, "%lf", data.temperature / SAMPLE_COUNT);
-            sprintf(pressure_string, "%lf", data.pressure / SAMPLE_COUNT);
-            sprintf(humidity_string, "%lf", data.humidity / SAMPLE_COUNT);
+            sprintf(json_string, "{\"time\": \"%s\", \"MAC\": \"%02x:%02x:%02x:%02x:%02x:%02x\", \"temperature\": %lf, \"humidity\": %lf, \"pressure\": %lf}", \
+                strftime_buf, \
+                base_mac_addr[0], \
+                base_mac_addr[1], \
+                base_mac_addr[2], \
+                base_mac_addr[3], \
+                base_mac_addr[4], \
+                base_mac_addr[5], \
+                data.temperature / SAMPLE_COUNT, \
+                data.humidity / SAMPLE_COUNT, \
+                data.pressure / SAMPLE_COUNT);
         #else
-            sprintf(temp_string, "%ld", (long int) data.temperature / SAMPLE_COUNT);
-            sprintf(pressure_string, "%ld", (long unsigned int) data.pressure / SAMPLE_COUNT);
-            sprintf(humidity_string, "%ld", (long unsigned int) data.humidity / SAMPLE_COUNT);
+            sprintf(json_string, "{\"time\": \"%s\", \"MAC\": \"%02x:%02x:%02x:%02x:%02x:%02x\",  \"temperature\": %ld, \"humidity\": %ld, \"pressure\": %ld}", \
+                strftime_buf, \
+                base_mac_addr[0], \
+                base_mac_addr[1], \
+                base_mac_addr[2], \
+                base_mac_addr[3], \
+                base_mac_addr[4], \
+                base_mac_addr[5], \
+                (long int) data.temperature / SAMPLE_COUNT, \
+                (long unsigned int) data.humidity / SAMPLE_COUNT, \
+                (long unsigned int) data.pressure / SAMPLE_COUNT);
         #endif
-
-        int msg_id = esp_mqtt_client_publish(client, "temperature", temp_string, 0, 1, 0);
-        ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
 
         #ifdef BME280_DOUBLE_ENABLE
-            printf("Averaged Double Precision Temperature:   %s deg C\n", temp_string);
+            ESP_LOGI(TAG, "Double Precision: %s", json_string);
         #else
-            printf("Averaged Temperature:   %s deg C\n", temp_string);
+            ESP_LOGI(TAG, "%s", json_string);
         #endif
 
-        msg_id = esp_mqtt_client_publish(client, "pressure", pressure_string, 0, 1, 0);
-        ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
+        int msg_id = esp_mqtt_client_publish(client, "env_sensor_data", json_string, 0, 1, 0);
 
-        #ifdef BME280_DOUBLE_ENABLE
-            printf("Averaged Double Precision Pressure:  %s Pa\n", pressure_string);
-        #else
-            printf("Averaged Pressure:   %s Pa\n", pressure_string);
-        #endif
-
-        msg_id = esp_mqtt_client_publish(client, "humidity", humidity_string, 0, 1, 0);
-        ESP_LOGI(TAG, "sent publish successful, msg_id=%d", msg_id);
-
-        #ifdef BME280_DOUBLE_ENABLE
-            printf("Averaged Double Precision Humidity:   %s %%RH\n", humidity_string);
-        #else
-            printf("Averaged Humidity:   %s %%RH\n", humidity_string);
-        #endif
-
-        ets_delay_us(1000000);
+        vTaskDelay(pdMS_TO_TICKS(CONFIG_MEASUREMENT_PERIOD));
     }
 
     bme280_esp32_deinit();
+}
+
+void app_main(void)
+{
+    wifi_init();
+
+    while (configureSNTP() != 0) {
+        ESP_LOGI(TAG, "Re-trying to configure SNTP");
+    }
+
+    xTaskCreate(taskPublishEnvironmentalData, "taskPublishEnvironmentalData", 4096, NULL, 10, NULL);
 }
 

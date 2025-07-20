@@ -24,4 +24,28 @@ menu "Main Configuration"
         help
             URL of the broker to connect to
 
+    config NTP_URI
+        string "Address of SNTP server"
+        default "pool.ntp.org"
+        help
+            URL Address of SNTP server.
+
+    config TIMEZONE_LOCATION
+        string "Name of Sensor Location (General)"
+        default "Adelaide"
+        help
+            The city or location where the sensor is generally.
+
+    config TIMEZONE_LOCAL_STRING
+        string "Timezone Location String"
+        default "ACST-9:30ACDT,M10.1.0,M4.1.0/3"
+        help
+            The SNTP timezone where the sensor is located. Sensor data is reported using this timezone. See https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
+
+    config MEASUREMENT_PERIOD
+        int "Time between publishing MQTT measurements, measured in ms"
+        default 10000
+        help
+            The SNTP timezone where the sensor is located. Sensor data is reported using this timezone. See https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
+
 endmenu
