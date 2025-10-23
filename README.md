@@ -1,35 +1,67 @@
-| Supported Targets | ESP32 | ESP32-C3 | ESP32-C6 | ESP32-H2 | ESP32-S2 | ESP32-S3 |
-| ----------------- | ----- | -------- | -------- | -------- | -------- | -------- |
-
-# I2C Simple Example
-
-(See the README.md file in the upper level 'examples' directory for more information about examples.)
+# Air Sensei
 
 ## Overview
 
-This example demonstrates basic usage of I2C driver by reading and writing from a I2C connected sensor:
+Air Sensei is an ESP32-based IOT temperature sensor platform. It interfaces with sensors to collect environmental data such as temperature, pressure, and humidity, and publishes this information over MQTT.
 
-If you have a new I2C application to go (for example, read the temperature data from external sensor with I2C interface), try this as a basic template, then add your own code.
+It uses the ESP-IDF framework, and Bosch BME280 driver code and is based on example code supplied by the ESP-IDF framework.
 
-## How to use example
+
+## Setup
 
 ### Hardware Required
 
-To run this example, you should have one ESP32, ESP32-S, ESP32-C or ESP32-H based development board as well as a MPU9250. MPU9250 is a inertial measurement unit, which contains a accelerometer, gyroscope as well as a magnetometer, for more information about it, you can read the [datasheet of the MPU9250 sensor](https://invensense.tdk.com/wp-content/uploads/2015/02/PS-MPU-9250A-01-v1.1.pdf).
+To run this software, you should have one ESP32, ESP32-S, ESP32-C or ESP32-H based development board as well as a BME280
 
-#### Pin Assignment:
+![ESP32 and BME280 Hardware](./airsensei.jpg "")
 
-**Note:** The following pin assignments are used by default, you can change these in the `menuconfig` .
+### Software Setup:
 
-|                  | SDA             | SCL           |
-| ---------------- | -------------- | -------------- |
-| ESP I2C Master   | I2C_MASTER_SDA | I2C_MASTER_SCL |
-| MPU9250 Sensor   | SDA            | SCL            |
+Run the following commands to setup:
+
+1. Checkout this repository and its dependencies:
+    ```bash
+    git clone https://github.com/slavistas/air-sensei.git
+    git clone https://github.com/espressif/esp-idf.git
+    git clone https://github.com/boschsensortec/BME280_SensorAPI.git
+    ```
+2. Setup esp-idf repo according to it's README:
+    ```bash
+    cd esp-idf
+    git submodule update --init --recursive
+    ./install.sh
+    source export.sh
+    ```
+3. Export ESP-IDF Framework
+    ```bash
+    source export.sh
+    ```
+4. Configure air-sensei menuconfig settings
+    ```bash
+    cd ../air-sensei
+    idf.py menuconfig
+    ```
+
+    Main Configuration ->
+    - (22) SCL GPIO Num
+    - (21) SDA GPIO Num
+    - (mqtt://mqttbroker.com) MQTT Broker URL
+    - (pool.ntp.org) Address of SNTP server
+    - (Garage) Name of Sensor Location (General)
+    - (ACST-9:30ACDT,M10.1.0,M4.1.0/3) Timezone Location String
+        See for timezone codes: https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
+    - (10000) Time between publishing MQTT measurements, measured in ms
+
+    Wifi Component Configuration ->
+    - (SSID) WiFi SSID
+    - (PASSWORD) WiFi Password
+
+5. Build air-sensei
+    ```bash
+    idf.py build
+    ```
 
 
-For the actual default value of `I2C_MASTER_SDA` and `I2C_MASTER_SCL` see `Example Configuration` in `menuconfig`.
-
-**Note:** There's no need to add an external pull-up resistors for SDA/SCL pin, because the driver will enable the internal pull-up resistors.
 
 ### Build and Flash
 
@@ -41,12 +73,36 @@ See the [Getting Started Guide](https://docs.espressif.com/projects/esp-idf/en/l
 
 ## Example Output
 
+This is an output of the serial console attached to the device:
 ```bash
-I (328) i2c-simple-example: I2C initialized successfully
-I (338) i2c-simple-example: WHO_AM_I = 71
-I (338) i2c-simple-example: I2C de-initialized successfully
+user@hostname:~$ tio /dev/ttyUSB0 -b 115200
+[tio 23:25:20] tio v1.32
+[tio 23:25:20] Press ctrl-t q to quit
+[tio 23:25:20] Connected
+I (4929171) MQTT_BME280: The current date/time in Adelaide is: Thu Oct 23 12:55:27 2025 GMT
+I (4929171) MQTT_BME280: Double Precision: {"time": "Thu Oct 23 12:55:27 2025 GMT", "MAC": "b0:b2:1c:a7:c4:d4", "temperature": 19.820527, "humidity": 46.303349, "pressure": 101169.567825}
+I (4929201) MQTT_BME280: MQTT_EVENT_PUBLISHED, msg_id=52920
+I (4939441) MQTT_BME280: The current date/time in Adelaide is: Thu Oct 23 12:55:38 2025 GMT
+I (4939441) MQTT_BME280: Double Precision: {"time": "Thu Oct 23 12:55:38 2025 GMT", "MAC": "b0:b2:1c:a7:c4:d4", "temperature": 19.891649, "humidity": 46.145645, "pressure": 101169.594131}
+I (4939461) MQTT_BME280: MQTT_EVENT_PUBLISHED, msg_id=60933
+I (4949711) MQTT_BME280: The current date/time in Adelaide is: Thu Oct 23 12:55:48 2025 GMT
+I (4949711) MQTT_BME280: Double Precision: {"time": "Thu Oct 23 12:55:48 2025 GMT", "MAC": "b0:b2:1c:a7:c4:d4", "temperature": 19.824604, "humidity": 46.229233, "pressure": 101171.911924}
+I (4949731) MQTT_BME280: MQTT_EVENT_PUBLISHED, msg_id=61734
+I (4959981) MQTT_BME280: The current date/time in Adelaide is: Thu Oct 23 12:55:58 2025 GMT
+I (4959981) MQTT_BME280: Double Precision: {"time": "Thu Oct 23 12:55:58 2025 GMT", "MAC": "b0:b2:1c:a7:c4:d4", "temperature": 19.904133, "humidity": 46.189880, "pressure": 101172.230851}
+I (4960011) MQTT_BME280: MQTT_EVENT_PUBLISHED, msg_id=2218
 ```
 
-## Troubleshooting
+This is an output as received by the MQTT broker:
+```bash
+user@hostname:~$ mosquitto_sub -t env_sensor_data
+{"time": "Thu Oct 23 12:51:31 2025 GMT", "MAC": "b0:b2:1c:a7:c4:d4", "temperature": 20.167844, "humidity": 45.461528, "pressure": 101166.557789}
+{"time": "Thu Oct 23 12:51:41 2025 GMT", "MAC": "b0:b2:1c:a7:c4:d4", "temperature": 20.084186, "humidity": 45.506805, "pressure": 101164.636625}
+{"time": "Thu Oct 23 12:51:31 2025 GMT", "MAC": "b0:b2:1c:a7:c4:d4", "temperature": 20.167844, "humidity": 45.461528, "pressure": 101166.557789}
+{"time": "Thu Oct 23 12:52:02 2025 GMT", "MAC": "b0:b2:1c:a7:c4:d4", "temperature": 20.079121, "humidity": 45.608930, "pressure": 101163.000503}
+```
 
-(For any technical queries, please open an [issue](https://github.com/espressif/esp-idf/issues) on GitHub. We will get back to you as soon as possible.)
+This is an image of environmental data displayed using Grafana.
+Note: this is an example only and not something this repo provides.
+
+![Grafana Display of Sensor data](./grafana_setup.png "")
