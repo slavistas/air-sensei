@@ -1,2 +1,2 @@
-idf_component_register(SRCS "i2c_simple_main.c"
-                        INCLUDE_DIRS "../../esp-idf/examples/common_components/protocol_examples_common/include")
+idf_component_register(SRCS "main.c"
+                        PRIV_REQUIRES "bme280" "driver" "esp_netif" "mqtt" "nvs_flash" "wifi_station")

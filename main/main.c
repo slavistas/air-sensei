@@ -31,11 +31,12 @@
 #include "mqtt_client.h"
 #include "esp_netif.h"
 #include "nvs_flash.h"
-#include "protocol_examples_common.h"
 
 /******************************************************************************/
 /*!                       BME280 Driver Includes                              */
 #include "bme280.h"
+#include "common.h"
+#include "esp32_common.h"
 #define SAMPLE_COUNT  UINT8_C(25)
 
 /******************************************************************************/
