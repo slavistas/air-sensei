@@ -15,7 +15,7 @@ To run this software, you should have one ESP32, ESP32-S, ESP32-C or ESP32-H bas
 
 ![ESP32 and BME280 Hardware](./airsensei.jpg "")
 
-### Software Setup:
+### Setup
 
 Run the following commands to setup:
 
@@ -23,22 +23,27 @@ Run the following commands to setup:
     ```bash
     git clone https://github.com/slavistas/air-sensei.git
     git clone https://github.com/espressif/esp-idf.git
-    git clone https://github.com/boschsensortec/BME280_SensorAPI.git
+    (cd air-sensei && git submodule update --init --recursive)
     ```
 2. Setup esp-idf repo according to it's README:
     ```bash
     cd esp-idf
     git submodule update --init --recursive
     ./install.sh
-    source export.sh
+    cd ../
     ```
-3. Export ESP-IDF Framework
+
+See the [Getting Started Guide](https://docs.espressif.com/projects/esp-idf/en/latest/get-started/index.html) for full steps to configure and use ESP-IDF to build projects.
+
+### Build
+
+1. Export ESP-IDF Framework
     ```bash
-    source export.sh
+    source esp-idf/export.sh
     ```
 4. Configure air-sensei menuconfig settings
     ```bash
-    cd ../air-sensei
+    cd air-sensei
     idf.py menuconfig
     ```
 
@@ -60,16 +65,17 @@ Run the following commands to setup:
     ```bash
     idf.py build
     ```
+### Flash
 
+1. Connect an ESP32 Device to your computer
+2. Enter the following command to build, flash, and monitor the project.
 
+    ```bash
+    idf.py -p PORT flash monitor
+    ```
 
-### Build and Flash
+To exit the serial monitor, type ``Ctrl + ]``
 
-Enter `idf.py -p PORT flash monitor` to build, flash and monitor the project.
-
-(To exit the serial monitor, type ``Ctrl-]``.)
-
-See the [Getting Started Guide](https://docs.espressif.com/projects/esp-idf/en/latest/get-started/index.html) for full steps to configure and use ESP-IDF to build projects.
 
 ## Example Output
 
@@ -102,7 +108,8 @@ user@hostname:~$ mosquitto_sub -t env_sensor_data
 {"time": "Thu Oct 23 12:52:02 2025 GMT", "MAC": "b0:b2:1c:a7:c4:d4", "temperature": 20.079121, "humidity": 45.608930, "pressure": 101163.000503}
 ```
 
-This is an image of environmental data displayed using Grafana.
-Note: this is an example only and not something this repo provides.
+This is an image of environmental data displayed using Grafana:
 
 ![Grafana Display of Sensor data](./grafana_setup.png "")
+
+Note: this is an example of how these sensors can be employed and requires additional software to setup.
